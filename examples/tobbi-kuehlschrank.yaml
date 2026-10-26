@@ -73,7 +73,7 @@ wifi:
 captive_portal:
 
 external_components:
-  - source: github://OWNER/esphome-thetford-ci@main
+  - source: github://bbruehmann/esphome-thetford-ci@main
     components: [thetford_ci]
     refresh: 1d
   # Alternativ lokal (Ordner components/ neben dieser YAML):

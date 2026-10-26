@@ -6,7 +6,7 @@ Das Protokoll stammt aus dem Reverse-Engineering von [horchi/linux-homectld](htt
 
 > **Status: experimentell, noch nicht am Gerät getestet.** Schreiben ist standardmäßig gesperrt (`allow_write: false`).
 
-![ESPHome validieren](https://github.com/OWNER/esphome-thetford-ci/actions/workflows/validate.yml/badge.svg)
+![ESPHome validieren](https://github.com/bbruehmann/esphome-thetford-ci/actions/workflows/validate.yml/badge.svg)
 
 ## Inhalt
 
@@ -22,7 +22,7 @@ In der Gerätekonfiguration:
 
 ```yaml
 external_components:
-  - source: github://OWNER/esphome-thetford-ci@main
+  - source: github://bbruehmann/esphome-thetford-ci@main
     components: [thetford_ci]
     refresh: 1d
 ```
