@@ -1,0 +1,191 @@
+# =============================================================================
+# Tobbi Kühlschrank – Thetford T2152C über CI-Bus (LIN)
+#
+# Hardware:
+#   AZ-Delivery ESP32-WROOM-32 DevKit (esp32dev)
+#   LIN-Modul (TJA1021-kompatibel), Klemmen GND/RX/SLP/TX + GND/LIN/INH/12V
+#
+# Verdrahtung:
+#   Modul TX   <- ESP G17          Modul 12V  <- 12 V abgesichert (2 A)
+#   Modul RX   -> ESP G16          Modul GND  -- 12-V-Minus (= Minus Kühlschrank)
+#   Modul SLP  <- ESP G4           Modul LIN  -> LIN-Pin CI-Bus-Stecker Kühlschrank
+#   Modul GND  -- ESP GND          Modul INH  -- frei
+#   ESP V5     <- 5 V aus 12->5-V-Wandler, ESP GND an gemeinsamen Minus
+#
+#   Masse-Pin am CI-Bus-Stecker des Kühlschranks NICHT anschließen.
+#   Master-Pull-up prüfen: LIN<->12V ca. 1 kΩ, sonst 1 kΩ + 1N4148 nachrüsten.
+#
+# Inbetriebnahme: 1. nur lesen (allow_write: false)  2. Werte am Display
+#   abgleichen  3. allow_write: true  – Details in README.md
+# =============================================================================
+
+substitutions:
+  name: tobbi-kuehlschrank
+  friendly_name: Tobbi Kühlschrank
+  # Pins AZ-Delivery DevKit
+  lin_tx_pin: GPIO17
+  lin_rx_pin: GPIO16
+  lin_slp_pin: GPIO4
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+  comment: Thetford T2152C über CI-Bus (LIN-Master)
+  project:
+    name: tobbi.thetford_ci
+    version: "0.1.0"
+  on_boot:
+    priority: 800
+    then:
+      # LIN-Transceiver aus dem Sleep holen (SLP = high)
+      - output.turn_on: lin_slp
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# ---------------------------------------------------------------------------
+# Basis
+# ---------------------------------------------------------------------------
+logger:
+  # Erster Test am Schreibtisch: VERBOSE (zeigt Header-Echo "55.4C").
+  # Im Betrieb auf DEBUG oder INFO zurückstellen.
+  level: DEBUG
+  logs:
+    thetford_ci: DEBUG
+
+api:
+  encryption:
+    key: !secret tobbi_kuehlschrank_api_key
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none        # stabileres WLAN neben dem Metallgehäuse
+  ap:
+    ssid: Tobbi-Kuehlschrank
+    password: !secret fallback_password
+
+captive_portal:
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+    components: [thetford_ci]
+
+# ---------------------------------------------------------------------------
+# LIN / CI-Bus
+# ---------------------------------------------------------------------------
+output:
+  - platform: gpio
+    id: lin_slp
+    pin: ${lin_slp_pin}
+
+uart:
+  id: lin_uart
+  tx_pin: ${lin_tx_pin}
+  rx_pin:
+    number: ${lin_rx_pin}
+    mode:
+      input: true
+      pullup: true             # RXD des Transceivers ist Open-Drain
+  baud_rate: 19200
+  rx_buffer_size: 256
+
+thetford_ci:
+  id: fridge
+  uart_id: lin_uart
+  update_interval: 5s
+  allow_write: false           # erst nach dem Abgleich auf true setzen
+  checksum: auto               # auto | classic | enhanced
+  status_frame_id: 0x0C
+  control_frame_id: 0x0B
+  response_timeout: 30ms
+  offline_after: 3
+  on_mode_value: 0x01
+  off_mode_value: 0x08         # alternativ 0x02 – beim Abgleich prüfen
+  write_repeat: 3
+
+# ---------------------------------------------------------------------------
+# Entitäten
+# ---------------------------------------------------------------------------
+sensor:
+  - platform: thetford_ci
+    supply_voltage:
+      name: Versorgungsspannung
+    fridge_level:
+      name: Stufe Kühlteil
+    freezer_level:
+      name: Stufe Gefrierfach
+    error_code:
+      name: Fehlercode
+    mode_raw:
+      name: Modus (Rohwert)
+
+  - platform: wifi_signal
+    name: WLAN-Signal
+    update_interval: 60s
+    entity_category: diagnostic
+
+  - platform: uptime
+    name: Laufzeit
+    entity_category: diagnostic
+
+binary_sensor:
+  - platform: thetford_ci
+    online:
+      name: CI-Bus verbunden
+    running:
+      name: In Betrieb
+    night_mode:
+      name: Nachtmodus aktiv
+    fault:
+      name: Störung
+      # Bis Byte 3 beim T2000 geklärt ist, standardmäßig ausgeblendet
+      disabled_by_default: true
+
+  - platform: status
+    name: ESP verbunden
+
+text_sensor:
+  - platform: thetford_ci
+    mode:
+      name: Betriebsmodus
+    status:
+      name: Status
+    raw_frame:
+      name: Status-Frame (roh)
+
+  - platform: version
+    name: ESPHome-Version
+    hide_timestamp: true
+
+  - platform: wifi_info
+    ip_address:
+      name: IP-Adresse
+
+switch:
+  - platform: thetford_ci
+    power:
+      name: Kühlschrank
+    night_mode:
+      name: Nachtmodus
+
+  - platform: restart
+    name: ESP neu starten
+
+number:
+  - platform: thetford_ci
+    fridge_level:
+      name: Stufe Kühlteil einstellen
+      min_value: 0
+      max_value: 5
+    freezer_level:
+      name: Stufe Gefrierfach einstellen
+      min_value: 0
+      max_value: 4

@@ -1,0 +1,27 @@
+name: ESPHome validieren
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install esphome
+      - name: Dummy-Secrets anlegen
+        run: |
+          cat > tests/secrets.yaml <<'S'
+          wifi_ssid: ci
+          wifi_password: ci-password-123
+          fallback_password: ci-password-123
+          tobbi_kuehlschrank_api_key: "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE="
+          S
+      - name: Konfiguration prüfen
+        run: esphome config tests/ci.yaml
+      - name: Firmware bauen
+        run: esphome compile tests/ci.yaml
